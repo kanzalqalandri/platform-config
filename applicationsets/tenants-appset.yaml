@@ -37,8 +37,8 @@ spec:
           targetRevision: HEAD
           ref: values
       destination:
-        name: "{{index .path.segments 1}}"        # cluster segment from the path
-        namespace: "{{index .path.segments 2}}"   # tenant segment = namespace
+        name: "{{index .path.segments 1}}"          # cluster segment from the path
+        namespace: "tenant-{{index .path.segments 2}}"  # dir is the bare tenant id; ns keeps a tenant- prefix
       syncPolicy:
         automated:
           prune: true
