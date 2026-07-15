@@ -1,0 +1,50 @@
+# Cluster ADD-ON plane — separate from tenant apps (envs/). Applied to the central
+# hub ArgoCD. Each addons/<cluster>/<addon>/ dir becomes one Application, sourced
+# from an UPSTREAM Helm chart with our values layered on top, deployed to that
+# cluster. Add an add-on = add a directory; target another cluster = another dir.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: cluster-addons
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/kanzalqalandri/platform-config
+        revision: HEAD
+        files:
+          - path: "addons/*/*/config.yaml"     # addons/<cluster>/<addon>/config.yaml
+  template:
+    metadata:
+      # segments: 0=addons 1=<cluster> 2=<addon>
+      name: "addon-{{index .path.segments 1}}-{{index .path.segments 2}}"
+      annotations:
+        argocd.argoproj.io/sync-wave: "{{.syncWave}}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      sources:
+        # Source 1: upstream Helm chart (repo/chart/version from config.yaml)
+        - repoURL: "{{.chartRepo}}"
+          chart: "{{.chart}}"
+          targetRevision: "{{.chartVersion}}"
+          helm:
+            valueFiles:
+              - "$values/addons/{{index .path.segments 1}}/{{index .path.segments 2}}/values.yaml"
+        # Source 2: our values repo (ref only — a ref source must not set chart)
+        - repoURL: https://github.com/kanzalqalandri/platform-config
+          targetRevision: HEAD
+          ref: values
+      destination:
+        name: "{{index .path.segments 1}}"       # route to the cluster in the path
+        namespace: "{{.namespace}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true                 # required: large CRDs (cert-manager) exceed the annotation limit

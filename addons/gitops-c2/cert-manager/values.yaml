@@ -1,0 +1,17 @@
+# Helm values for cert-manager on gitops-c2.
+crds:
+  enabled: true          # let the chart manage its CRDs (paired with ServerSideApply)
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+webhook:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+cainjector:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi

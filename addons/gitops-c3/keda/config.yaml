@@ -1,0 +1,5 @@
+chartRepo: https://kedacore.github.io/charts
+chart: keda
+chartVersion: 2.20.1
+namespace: keda
+syncWave: "-5"
