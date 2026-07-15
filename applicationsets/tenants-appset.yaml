@@ -29,10 +29,15 @@ spec:
           targetRevision: "{{.chartRevision}}"
           path: "{{.helmPath}}"
           helm:
+            # per-cluster/per-app base files are optional — skip any that don't exist
+            ignoreMissingValueFiles: true
             valueFiles:
-              - "$values/tenants/_base/values.yaml"
-              - "$values/tenants/_base/{{index .path.segments 3}}/values.yaml"
-              - "$values/{{.path.path}}/values.yaml"
+              # ordered low -> high precedence (last wins)
+              - "$values/tenants/_base/values.yaml"                                             # global
+              - "$values/tenants/_base/{{index .path.segments 3}}/values.yaml"                   # global per-app
+              - "$values/tenants/{{index .path.segments 1}}/_base/values.yaml"                   # per-cluster (all tenants)
+              - "$values/tenants/{{index .path.segments 1}}/_base/{{index .path.segments 3}}/values.yaml"  # per-cluster per-app
+              - "$values/{{.path.path}}/values.yaml"                                             # per-tenant
         - repoURL: https://github.com/kanzalqalandri/platform-config
           targetRevision: HEAD
           ref: values
