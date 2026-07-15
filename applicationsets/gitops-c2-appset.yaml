@@ -1,0 +1,49 @@
+# ApplicationSet for cluster gitops-c2 (independent ArgoCD instance).
+# Scoped to envs/dev/gitops-c2/** so it never overlaps the c1 dev-appset,
+# which globs envs/dev/*/* (exactly tenant/app, one level shallower).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: dev-c2-applications
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/kanzalqalandri/platform-config
+        revision: HEAD
+        files:
+          - path: "envs/dev/gitops-c2/*/*/config.yaml"   # <cluster>/<tenant>/<app>
+  template:
+    metadata:
+      # segments: 0=envs 1=dev 2=gitops-c2 3=<tenant> 4=<app>
+      name: "dev-{{index .path.segments 3}}-{{index .path.segments 4}}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      sources:
+        - repoURL: "{{.appRepoURL}}"
+          targetRevision: "{{.chartRevision}}"
+          path: "{{.helmPath}}"
+          helm:
+            valueFiles:
+              - "$values/envs/dev/_base/values.yaml"
+              - "$values/envs/dev/_base/{{index .path.segments 4}}/values.yaml"
+              - "$values/{{.path.path}}/values.yaml"
+        - repoURL: https://github.com/kanzalqalandri/platform-config
+          targetRevision: HEAD
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "dev-{{index .path.segments 3}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        managedNamespaceMetadata:
+          labels:
+            app.kubernetes.io/managed-by: argocd
+        syncOptions:
+          - CreateNamespace=true
