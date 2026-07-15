@@ -1,0 +1,4 @@
+appRepoURL: https://github.com/kanzalqalandri/gitops-demo-app
+chartRevision: main
+helmPath: helm
+destinationCluster: gitops-c3   # runs on the c3 spoke

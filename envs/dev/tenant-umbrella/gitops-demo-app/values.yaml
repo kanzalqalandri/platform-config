@@ -1,0 +1,4 @@
+tenantName: umbrella
+image:
+  tag: "latest"
+replicaCount: 2
