@@ -1,0 +1,52 @@
+# One ApplicationSet for the dev environment.
+# The git files generator auto-discovers tenants/apps as config.yaml files appear
+# under envs/dev/<tenant>/<app>/. (Single-cluster demo -> in-cluster destination.)
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: dev-applications
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/kanzalqalandri/platform-config
+        revision: HEAD
+        files:
+          - path: "envs/dev/*/*/config.yaml"   # envs/dev/<tenant>/<app>/config.yaml
+  template:
+    metadata:
+      # segments: 0=envs 1=dev 2=<tenant> 3=<app>
+      name: "dev-{{index .path.segments 2}}-{{index .path.segments 3}}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io   # cascade-delete on offboard
+    spec:
+      project: default
+      sources:
+        # Source 1: Helm chart from the app repo
+        - repoURL: "{{.appRepoURL}}"
+          targetRevision: "{{.chartRevision}}"
+          path: "{{.helmPath}}"
+          helm:
+            valueFiles:
+              # ordered, last wins: env base -> app base -> tenant override
+              - "$values/envs/dev/_base/values.yaml"
+              - "$values/envs/dev/_base/{{index .path.segments 3}}/values.yaml"
+              - "$values/{{.path.path}}/values.yaml"
+        # Source 2: this repo, exposed as the `values` ref (no chart on a ref source)
+        - repoURL: https://github.com/kanzalqalandri/platform-config
+          targetRevision: HEAD
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "dev-{{index .path.segments 2}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        managedNamespaceMetadata:
+          labels:
+            app.kubernetes.io/managed-by: argocd
+        syncOptions:
+          - CreateNamespace=true
