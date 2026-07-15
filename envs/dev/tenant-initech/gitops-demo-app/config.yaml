@@ -1,3 +1,4 @@
 appRepoURL: https://github.com/kanzalqalandri/gitops-demo-app
 chartRevision: main
 helmPath: helm
+destinationCluster: gitops-c2   # which registered cluster this tenant runs on

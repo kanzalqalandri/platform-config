@@ -1,10 +1,12 @@
-# ApplicationSet for cluster gitops-c2 (independent ArgoCD instance).
-# Scoped to envs/dev/gitops-c2/** so it never overlaps the c1 dev-appset,
-# which globs envs/dev/*/* (exactly tenant/app, one level shallower).
+# ONE ApplicationSet for the whole dev fleet, applied to the CENTRAL ArgoCD (hub).
+# Each tenant/app's config.yaml declares `destinationCluster`; this appset routes
+# the Application to that registered cluster. Scales to N clusters with NO new
+# appset — adding a cluster = register its cluster Secret; moving a tenant to a
+# different cluster = change one field.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: dev-c2-applications
+  name: dev-fleet
   namespace: argocd
 spec:
   goTemplate: true
@@ -14,11 +16,11 @@ spec:
         repoURL: https://github.com/kanzalqalandri/platform-config
         revision: HEAD
         files:
-          - path: "envs/dev/gitops-c2/*/*/config.yaml"   # <cluster>/<tenant>/<app>
+          - path: "envs/dev/*/*/config.yaml"   # envs/dev/<tenant>/<app>/config.yaml
   template:
     metadata:
-      # segments: 0=envs 1=dev 2=gitops-c2 3=<tenant> 4=<app>
-      name: "dev-{{index .path.segments 3}}-{{index .path.segments 4}}"
+      # segments: 0=envs 1=dev 2=<tenant> 3=<app>
+      name: "dev-{{index .path.segments 2}}-{{index .path.segments 3}}"
       finalizers:
         - resources-finalizer.argocd.argoproj.io
     spec:
@@ -30,14 +32,14 @@ spec:
           helm:
             valueFiles:
               - "$values/envs/dev/_base/values.yaml"
-              - "$values/envs/dev/_base/{{index .path.segments 4}}/values.yaml"
+              - "$values/envs/dev/_base/{{index .path.segments 3}}/values.yaml"
               - "$values/{{.path.path}}/values.yaml"
         - repoURL: https://github.com/kanzalqalandri/platform-config
           targetRevision: HEAD
           ref: values
       destination:
-        server: https://kubernetes.default.svc
-        namespace: "dev-{{index .path.segments 3}}"
+        name: "{{.destinationCluster}}"          # <-- routes to the registered cluster
+        namespace: "dev-{{index .path.segments 2}}"
       syncPolicy:
         automated:
           prune: true
