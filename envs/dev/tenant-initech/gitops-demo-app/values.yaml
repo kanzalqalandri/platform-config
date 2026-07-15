@@ -1,4 +1,4 @@
 tenantName: initech
 image:
-  tag: "plain-text"
+  tag: "v1.0.0"
 replicaCount: 3
