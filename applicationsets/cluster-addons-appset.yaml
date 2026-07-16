@@ -1,7 +1,10 @@
-# Cluster ADD-ON plane — separate from tenant apps (envs/). Applied to the central
-# hub ArgoCD. Each addons/<cluster>/<addon>/ dir becomes one Application, sourced
-# from an UPSTREAM Helm chart with our values layered on top, deployed to that
-# cluster. Add an add-on = add a directory; target another cluster = another dir.
+# DRY cluster add-ons. Definitions live ONCE in addons/catalog/<addon>/.
+# Enablement lives on each cluster Secret as a label: enable-<addon>: "true".
+# Optional per-cluster value overrides: addons/overrides/<cluster>/<addon>/values.yaml.
+#
+# matrix(catalog git-files × clusters) produces every (addon, cluster) pair; the
+# Post-Selector (spec.selector) drops pairs the cluster didn't opt into. You cannot
+# template a matchLabels KEY, so this cartesian + post-selector is the supported way.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -11,15 +14,26 @@ spec:
   goTemplate: true
   goTemplateOptions: ["missingkey=error"]
   generators:
-    - git:
-        repoURL: https://github.com/kanzalqalandri/platform-config
-        revision: HEAD
-        files:
-          - path: "addons/*/*/config.yaml"     # addons/<cluster>/<addon>/config.yaml
+    - matrix:
+        generators:
+          - git:
+              repoURL: https://github.com/kanzalqalandri/platform-config
+              revision: HEAD
+              files:
+                - path: "addons/catalog/*/config.yaml"     # gen1: catalog -> chart ref + .path.basename = addon
+          - clusters:                                       # gen2: whole fleet
+              values:
+                # compute per-(cluster,addon) enable flag from the cluster's enable-<addon> label
+                enabled: '{{ $a := .path.basename }}{{ if hasKey .metadata.labels (printf "enable-%s" $a) }}{{ index .metadata.labels (printf "enable-%s" $a) }}{{ else }}false{{ end }}'
+  # POST-SELECTOR: keep only the pairs the cluster enabled
+  selector:
+    matchExpressions:
+      - key: enabled
+        operator: In
+        values: ["true"]
   template:
     metadata:
-      # segments: 0=addons 1=<cluster> 2=<addon>
-      name: "addon-{{index .path.segments 1}}-{{index .path.segments 2}}"
+      name: "addon-{{.name}}-{{.path.basename}}"
       annotations:
         argocd.argoproj.io/sync-wave: "{{.syncWave}}"
       finalizers:
@@ -27,19 +41,19 @@ spec:
     spec:
       project: default
       sources:
-        # Source 1: upstream Helm chart (repo/chart/version from config.yaml)
         - repoURL: "{{.chartRepo}}"
           chart: "{{.chart}}"
           targetRevision: "{{.chartVersion}}"
           helm:
+            ignoreMissingValueFiles: true
             valueFiles:
-              - "$values/addons/{{index .path.segments 1}}/{{index .path.segments 2}}/values.yaml"
-        # Source 2: our values repo (ref only — a ref source must not set chart)
+              - "$values/addons/catalog/{{.path.basename}}/values.yaml"                 # base (defined once)
+              - "$values/addons/overrides/{{.name}}/{{.path.basename}}/values.yaml"     # optional per-cluster override
         - repoURL: https://github.com/kanzalqalandri/platform-config
           targetRevision: HEAD
           ref: values
       destination:
-        name: "{{index .path.segments 1}}"       # route to the cluster in the path
+        name: "{{.name}}"
         namespace: "{{.namespace}}"
       syncPolicy:
         automated:
@@ -47,4 +61,4 @@ spec:
           selfHeal: true
         syncOptions:
           - CreateNamespace=true
-          - ServerSideApply=true                 # required: large CRDs (cert-manager) exceed the annotation limit
+          - ServerSideApply=true
