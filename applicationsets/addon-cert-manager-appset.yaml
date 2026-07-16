@@ -1,7 +1,7 @@
-# Per-add-on ApplicationSet (one per add-on, NOT per cluster). DRY:
-# chart ref + base values live once in addons/catalog/cert-manager/.
-# Enable on a cluster by labelling its Secret: enable-cert-manager: "true".
-# Optional per-cluster override: addons/overrides/<cluster>/cert-manager/values.yaml
+# Per-add-on ApplicationSet — fully file-driven, no cluster labels.
+# gen1 = catalog (chart ref, defined once). gen2 = per-cluster enable files
+# (addons/clusters/<cluster>/cert-manager.yaml); a file's existence enables cert-manager on
+# that cluster, and its chartVersion sets the per-cluster version.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -13,18 +13,19 @@ spec:
   generators:
     - matrix:
         generators:
-          - git:                                   # catalog entry -> chart ref (defined once)
+          - git:
               repoURL: https://github.com/kanzalqalandri/platform-config
               revision: HEAD
               files:
-                - path: "addons/catalog/cert-manager/config.yaml"
-          - clusters:                              # only clusters that opted in
-              selector:
-                matchLabels:
-                  enable-cert-manager: "true"
+                - path: "addons/catalog/cert-manager/config.yaml"       # chartRepo, chart, namespace, syncWave
+          - git:
+              repoURL: https://github.com/kanzalqalandri/platform-config
+              revision: HEAD
+              files:
+                - path: "addons/clusters/*/cert-manager.yaml"            # cluster, chartVersion (existence = enabled)
   template:
     metadata:
-      name: "addon-{{.name}}-cert-manager"
+      name: "addon-{{.cluster}}-cert-manager"
       annotations:
         argocd.argoproj.io/sync-wave: "{{.syncWave}}"
       finalizers:
@@ -39,12 +40,12 @@ spec:
             ignoreMissingValueFiles: true
             valueFiles:
               - "$values/addons/catalog/cert-manager/values.yaml"
-              - "$values/addons/overrides/{{.name}}/cert-manager/values.yaml"
+              - "$values/addons/overrides/{{.cluster}}/cert-manager/values.yaml"
         - repoURL: https://github.com/kanzalqalandri/platform-config
           targetRevision: HEAD
           ref: values
       destination:
-        name: "{{.name}}"
+        name: "{{.cluster}}"
         namespace: "{{.namespace}}"
       syncPolicy:
         automated:

@@ -1,7 +1,7 @@
-# Per-add-on ApplicationSet (one per add-on, NOT per cluster). DRY:
-# chart ref + base values live once in addons/catalog/keda/.
-# Enable on a cluster by labelling its Secret: enable-keda: "true".
-# Optional per-cluster override: addons/overrides/<cluster>/keda/values.yaml
+# Per-add-on ApplicationSet — fully file-driven, no cluster labels.
+# gen1 = catalog (chart ref, defined once). gen2 = per-cluster enable files
+# (addons/clusters/<cluster>/keda.yaml); a file's existence enables keda on
+# that cluster, and its chartVersion sets the per-cluster version.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -13,18 +13,19 @@ spec:
   generators:
     - matrix:
         generators:
-          - git:                                   # catalog entry -> chart ref (defined once)
+          - git:
               repoURL: https://github.com/kanzalqalandri/platform-config
               revision: HEAD
               files:
-                - path: "addons/catalog/keda/config.yaml"
-          - clusters:                              # only clusters that opted in
-              selector:
-                matchLabels:
-                  enable-keda: "true"
+                - path: "addons/catalog/keda/config.yaml"       # chartRepo, chart, namespace, syncWave
+          - git:
+              repoURL: https://github.com/kanzalqalandri/platform-config
+              revision: HEAD
+              files:
+                - path: "addons/clusters/*/keda.yaml"            # cluster, chartVersion (existence = enabled)
   template:
     metadata:
-      name: "addon-{{.name}}-keda"
+      name: "addon-{{.cluster}}-keda"
       annotations:
         argocd.argoproj.io/sync-wave: "{{.syncWave}}"
       finalizers:
@@ -34,20 +35,17 @@ spec:
       sources:
         - repoURL: "{{.chartRepo}}"
           chart: "{{.chart}}"
-          # per-cluster version override: label `keda-version` on the cluster Secret
-          # wins over the catalog default (chartVersion is targetRevision, not a helm value).
-          # range avoids sprig hasKey (labels are map[string]string, not map[string]interface{}).
-          targetRevision: '{{ $v := .chartVersion }}{{ range $k, $val := .metadata.labels }}{{ if eq $k "keda-version" }}{{ $v = $val }}{{ end }}{{ end }}{{ $v }}'
+          targetRevision: "{{.chartVersion}}"
           helm:
             ignoreMissingValueFiles: true
             valueFiles:
               - "$values/addons/catalog/keda/values.yaml"
-              - "$values/addons/overrides/{{.name}}/keda/values.yaml"
+              - "$values/addons/overrides/{{.cluster}}/keda/values.yaml"
         - repoURL: https://github.com/kanzalqalandri/platform-config
           targetRevision: HEAD
           ref: values
       destination:
-        name: "{{.name}}"
+        name: "{{.cluster}}"
         namespace: "{{.namespace}}"
       syncPolicy:
         automated:

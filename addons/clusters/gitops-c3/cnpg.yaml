@@ -1,0 +1,2 @@
+cluster: gitops-c3
+chartVersion: "0.29.0"

@@ -1,7 +1,7 @@
-# Per-add-on ApplicationSet (one per add-on, NOT per cluster). DRY:
-# chart ref + base values live once in addons/catalog/cnpg/.
-# Enable on a cluster by labelling its Secret: enable-cnpg: "true".
-# Optional per-cluster override: addons/overrides/<cluster>/cnpg/values.yaml
+# Per-add-on ApplicationSet — fully file-driven, no cluster labels.
+# gen1 = catalog (chart ref, defined once). gen2 = per-cluster enable files
+# (addons/clusters/<cluster>/cnpg.yaml); a file's existence enables cnpg on
+# that cluster, and its chartVersion sets the per-cluster version.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -13,18 +13,19 @@ spec:
   generators:
     - matrix:
         generators:
-          - git:                                   # catalog entry -> chart ref (defined once)
+          - git:
               repoURL: https://github.com/kanzalqalandri/platform-config
               revision: HEAD
               files:
-                - path: "addons/catalog/cnpg/config.yaml"
-          - clusters:                              # only clusters that opted in
-              selector:
-                matchLabels:
-                  enable-cnpg: "true"
+                - path: "addons/catalog/cnpg/config.yaml"       # chartRepo, chart, namespace, syncWave
+          - git:
+              repoURL: https://github.com/kanzalqalandri/platform-config
+              revision: HEAD
+              files:
+                - path: "addons/clusters/*/cnpg.yaml"            # cluster, chartVersion (existence = enabled)
   template:
     metadata:
-      name: "addon-{{.name}}-cnpg"
+      name: "addon-{{.cluster}}-cnpg"
       annotations:
         argocd.argoproj.io/sync-wave: "{{.syncWave}}"
       finalizers:
@@ -39,12 +40,12 @@ spec:
             ignoreMissingValueFiles: true
             valueFiles:
               - "$values/addons/catalog/cnpg/values.yaml"
-              - "$values/addons/overrides/{{.name}}/cnpg/values.yaml"
+              - "$values/addons/overrides/{{.cluster}}/cnpg/values.yaml"
         - repoURL: https://github.com/kanzalqalandri/platform-config
           targetRevision: HEAD
           ref: values
       destination:
-        name: "{{.name}}"
+        name: "{{.cluster}}"
         namespace: "{{.namespace}}"
       syncPolicy:
         automated:
