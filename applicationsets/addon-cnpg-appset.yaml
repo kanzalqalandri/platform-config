@@ -1,0 +1,55 @@
+# Per-add-on ApplicationSet (one per add-on, NOT per cluster). DRY:
+# chart ref + base values live once in addons/catalog/cnpg/.
+# Enable on a cluster by labelling its Secret: enable-cnpg: "true".
+# Optional per-cluster override: addons/overrides/<cluster>/cnpg/values.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: addon-cnpg
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - matrix:
+        generators:
+          - git:                                   # catalog entry -> chart ref (defined once)
+              repoURL: https://github.com/kanzalqalandri/platform-config
+              revision: HEAD
+              files:
+                - path: "addons/catalog/cnpg/config.yaml"
+          - clusters:                              # only clusters that opted in
+              selector:
+                matchLabels:
+                  enable-cnpg: "true"
+  template:
+    metadata:
+      name: "addon-{{.name}}-cnpg"
+      annotations:
+        argocd.argoproj.io/sync-wave: "{{.syncWave}}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      sources:
+        - repoURL: "{{.chartRepo}}"
+          chart: "{{.chart}}"
+          targetRevision: "{{.chartVersion}}"
+          helm:
+            ignoreMissingValueFiles: true
+            valueFiles:
+              - "$values/addons/catalog/cnpg/values.yaml"
+              - "$values/addons/overrides/{{.name}}/cnpg/values.yaml"
+        - repoURL: https://github.com/kanzalqalandri/platform-config
+          targetRevision: HEAD
+          ref: values
+      destination:
+        name: "{{.name}}"
+        namespace: "{{.namespace}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
