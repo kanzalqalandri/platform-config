@@ -1,0 +1,2 @@
+# Per-cluster override: only cert-manager on gitops-c2. Layered over the catalog base.
+replicaCount: 2
