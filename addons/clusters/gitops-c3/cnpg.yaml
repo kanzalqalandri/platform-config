@@ -1,4 +1,5 @@
 enabled: true
+version: 0.28.0
 values:
   resources:
     requests:
