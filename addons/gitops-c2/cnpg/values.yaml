@@ -1,0 +1,5 @@
+# CloudNativePG operator. Chart installs its CRDs (paired with ServerSideApply).
+resources:
+  requests:
+    cpu: 25m
+    memory: 64Mi
