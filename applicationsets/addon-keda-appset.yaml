@@ -34,7 +34,9 @@ spec:
       sources:
         - repoURL: "{{.chartRepo}}"
           chart: "{{.chart}}"
-          targetRevision: "{{.chartVersion}}"
+          # per-cluster version override: label `keda-version` on the cluster Secret
+          # wins over the catalog default (chartVersion is targetRevision, not a helm value)
+          targetRevision: '{{ if hasKey .metadata.labels "keda-version" }}{{ index .metadata.labels "keda-version" }}{{ else }}{{ .chartVersion }}{{ end }}'
           helm:
             ignoreMissingValueFiles: true
             valueFiles:
