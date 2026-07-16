@@ -1,0 +1,10 @@
+# Helm values for KEDA on gitops-c3. Chart installs its CRDs by default.
+resources:
+  operator:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+  metricServer:
+    requests:
+      cpu: 10m
+      memory: 64Mi
