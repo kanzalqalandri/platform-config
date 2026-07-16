@@ -1,5 +1,6 @@
 enabled: true
-resources:
-  requests:
-    cpu: 125m
-    memory: 264Mi
+values:
+  resources:
+    requests:
+      cpu: 125m
+      memory: 264Mi
