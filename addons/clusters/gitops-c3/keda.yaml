@@ -1,2 +1,2 @@
-cluster: gitops-c3
-chartVersion: "2.18.3"
+enabled: true
+version: "2.18.3"      # per-cluster version override

@@ -1,2 +1,1 @@
-cluster: gitops-c3
-chartVersion: "v1.21.0"
+enabled: true

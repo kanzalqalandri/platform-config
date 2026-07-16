@@ -1,4 +1,0 @@
-chartRepo: https://cloudnative-pg.github.io/charts
-chart: cloudnative-pg
-namespace: cnpg-system
-syncWave: "-5"

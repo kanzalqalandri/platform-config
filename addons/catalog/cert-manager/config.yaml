@@ -1,4 +1,0 @@
-chartRepo: https://charts.jetstack.io
-chart: cert-manager
-namespace: cert-manager
-syncWave: "-5"

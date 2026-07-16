@@ -1,2 +1,1 @@
-cluster: gitops-c2
-chartVersion: "0.29.0"
+enabled: true
