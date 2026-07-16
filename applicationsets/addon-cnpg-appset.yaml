@@ -1,7 +1,6 @@
-# Per-add-on ApplicationSet. The add-on is defined ONCE here (chart ref) +
-# addons/catalog/cnpg/values.yaml (base values). To run it on a cluster, create
-# ONE file: addons/clusters/<cluster>/cnpg.yaml. That file's existence enables it;
-# optional 'version:' pins a per-cluster chart version; optional 'values:' overrides.
+# Per-add-on ApplicationSet. Add-on defined ONCE here (chart ref) + addons/catalog/cnpg/values.yaml (base).
+# To run it on a cluster, create ONE file: addons/clusters/<cluster>/cnpg.yaml
+#   (existence = enabled; optional 'version:' pins a per-cluster version; optional 'values:' overrides).
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -14,7 +13,7 @@ spec:
         repoURL: https://github.com/kanzalqalandri/platform-config
         revision: HEAD
         files:
-          - path: "addons/clusters/*/cnpg.yaml"     # existence = enabled; parent dir = cluster
+          - path: "addons/clusters/*/cnpg.yaml"
   template:
     metadata:
       name: "addon-{{.path.basename}}-cnpg"
@@ -27,13 +26,13 @@ spec:
       sources:
         - repoURL: https://cloudnative-pg.github.io/charts
           chart: cloudnative-pg
-          targetRevision: '{{ dig "version" "0.29.0" . }}'   # per-cluster version or default
+          targetRevision: '{{ dig "version" "0.29.0" . }}'
           helm:
             ignoreMissingValueFiles: true
             valueFiles:
-              - "$values/addons/catalog/cnpg/values.yaml"   # base values (once)
-            valuesObject:
-              {{- dig "values" dict . | toYaml | nindent 14 }}  # inline per-cluster override
+              - "$values/addons/catalog/cnpg/values.yaml"
+            values: |
+              {{ toYaml (dig "values" (dict) .) }}
         - repoURL: https://github.com/kanzalqalandri/platform-config
           targetRevision: HEAD
           ref: values
