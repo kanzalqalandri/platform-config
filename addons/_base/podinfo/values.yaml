@@ -1,5 +1,5 @@
 # Common podinfo values for the whole fleet. Per-cluster overrides go in
-# addons/clusters/<cluster>/podinfo/values.yaml (layered on top of this).
+# addons/overrides/<cluster>/podinfo/values.yaml (layered on top of this).
 replicaCount: 1
 resources:
   requests:

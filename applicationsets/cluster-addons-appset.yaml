@@ -3,12 +3,12 @@
 # addon directories:
 #
 #   clusters/<cluster>/config.yaml              -> {cloud, role, addonOverrides?}
-#   addons/all/<addon>/config.yaml              -> runs on EVERY cluster
+#   addons/fleet/<addon>/config.yaml              -> runs on EVERY cluster
 #   addons/roles/<role>/<addon>/config.yaml     -> runs on every cluster of that role
 #   addons/clouds/<cloud>/<addon>/config.yaml   -> runs on every cluster of that cloud
 #   addons/oneoffs/<cluster>/<app>/config.yaml     -> ONE-OFF: runs on that ONE named cluster
 #
-# The all/role/cloud/oneoffs tiers are a specificity ladder (least -> most specific);
+# The fleet/role/cloud/oneoffs tiers are a specificity ladder (least -> most specific);
 # "oneoffs" is the most-specific rung: placement by cluster NAME, for a platform/ops
 # component that belongs on exactly one cluster. Do NOT abuse roles/ for this — a
 # second cluster of that role would silently pick the app up too.
@@ -23,8 +23,8 @@
 #
 # Values precedence (last wins), assembled via ignoreMissingValueFiles:
 #   addons/_base/<addon>/values.yaml                 fleet-wide (define once)
-#   <dir of the matched config.yaml>/values.yaml     tier-level (all / role / cloud / oneoffs)
-#   addons/clusters/<cluster>/<addon>/values.yaml    per-cluster escape hatch
+#   <dir of the matched config.yaml>/values.yaml     tier-level (fleet / role / cloud / oneoffs)
+#   addons/overrides/<cluster>/<addon>/values.yaml per-cluster escape hatch
 # (For a "oneoffs" one-off, its values.yaml lives next to its config.yaml, so the
 #  tier-level entry above already picks it up.)
 #
@@ -52,7 +52,7 @@ spec:
               repoURL: https://github.com/kanzalqalandri/platform-config
               revision: main
               files:
-                - path: "addons/all/*/config.yaml"
+                - path: "addons/fleet/*/config.yaml"
                 - path: "addons/roles/{{.role}}/*/config.yaml"
                 - path: "addons/clouds/{{.cloud}}/*/config.yaml"
                 - path: "addons/oneoffs/{{.cluster.path.basename}}/*/config.yaml"   # one-off: this cluster only
@@ -79,7 +79,7 @@ spec:
               # ordered low -> high precedence (last wins)
               - "$values/addons/_base/{{.path.basename}}/values.yaml"
               - "$values/{{.path.path}}/values.yaml"
-              - "$values/addons/clusters/{{.cluster.path.basename}}/{{.path.basename}}/values.yaml"
+              - "$values/addons/overrides/{{.cluster.path.basename}}/{{.path.basename}}/values.yaml"
         # Source 2: our values repo (ref only — a ref source must not set chart)
         - repoURL: https://github.com/kanzalqalandri/platform-config
           targetRevision: main

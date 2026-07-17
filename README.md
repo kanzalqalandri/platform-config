@@ -28,11 +28,11 @@ clusters/                        # cluster registry — single source of cluster
 
 addons/
   _base/<addon>/values.yaml            # fleet-wide addon values (define once)
-  all/<addon>/config.yaml              # runs on EVERY cluster        (chart repo/version/ns)
+  fleet/<addon>/config.yaml            # runs on EVERY cluster        (chart repo/version/ns)
   roles/<role>/<addon>/config.yaml     # runs on every <role> cluster (+ optional values.yaml)
   clouds/<cloud>/<addon>/config.yaml   # runs on every <cloud> cluster (+ optional values.yaml)
   oneoffs/<cluster>/<app>/config.yaml     # ONE-OFF: runs on that ONE named cluster (+ optional values.yaml)
-  clusters/<cluster>/<addon>/values.yaml  # per-cluster value escape hatch   [optional]
+  overrides/<cluster>/<addon>/values.yaml # per-cluster value escape hatch   [optional]
 
 tenants/
   _base/values.yaml                    # global defaults (all clusters, all tenants)
@@ -63,12 +63,12 @@ powergrader/
 Assembled by ArgoCD multi-source `valueFiles` (`ignoreMissingValueFiles: true`,
 so optional tiers are skipped when absent).
 
-Add-ons (`all` < `roles/<role>` < `clouds/<cloud>` < `oneoffs/<cluster>` — least → most specific placement):
+Add-ons (`fleet` < `roles/<role>` < `clouds/<cloud>` < `oneoffs/<cluster>` — least → most specific placement):
 ```
 chart defaults
 → addons/_base/<addon>/values.yaml               fleet-wide
-→ addons/{all|roles/<role>|clouds/<cloud>|oneoffs/<cluster>}/<addon>/values.yaml   tier-level
-→ addons/clusters/<cluster>/<addon>/values.yaml  per-cluster
+→ addons/{fleet|roles/<role>|clouds/<cloud>|oneoffs/<cluster>}/<addon>/values.yaml   tier-level
+→ addons/overrides/<cluster>/<addon>/values.yaml  per-cluster
 ```
 A **one-off** platform component on a single cluster = one `addons/oneoffs/<cluster>/<app>/config.yaml`
 (placement by cluster NAME). Do not use `roles/` for this — a second cluster of that
