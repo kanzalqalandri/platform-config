@@ -1,6 +1,0 @@
-# Cluster add-on definition (upstream Helm chart). Read by the cluster-addons appset.
-chartRepo: https://cloudnative-pg.github.io/charts
-chart: cloudnative-pg
-chartVersion: 0.28.0    # pinned behind the fleet default (0.29.0) on this cluster
-namespace: cnpg-system
-syncWave: "-5"

@@ -1,6 +1,0 @@
-# Cluster add-on definition (upstream Helm chart). Read by the cluster-addons appset.
-chartRepo: https://kedacore.github.io/charts
-chart: keda
-chartVersion: 2.18.3    # pinned behind the chart default (2.20.1) on this cluster
-namespace: keda
-syncWave: "-5"

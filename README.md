@@ -4,12 +4,34 @@
 No templates, no rendering engine — just the desired state, in git. A **central
 (hub) ArgoCD** on `gitops-c1` reconciles it onto the registered spoke clusters.
 
+## Cluster types
+
+Every cluster has two identity axes, declared once in the **cluster registry**:
+
+| axis | values |
+|---|---|
+| `cloud` | `aws`, `azure` |
+| `role` | `primary`, `satellite`, `mgmt` |
+
+Demo fleet: `gitops-c2` = `{aws, satellite}` (dev/qa), `gitops-c3` = `{aws, primary}` (prod).
+
 ## Layout
 
 ```
 applicationsets/
-  tenants-appset.yaml            # tenant apps  (reads tenants/<cluster>/<tenant>/<app>)
-  cluster-addons-appset.yaml     # cluster add-ons (reads addons/<cluster>/<addon>)
+  tenants-appset.yaml            # tenant apps   (reads tenants/<cluster>/<tenant>/<app>)
+  powergrader-appset.yaml        # powergrader   (reads powergrader/<cluster>/<env>/<app>)
+  cluster-addons-appset.yaml     # add-ons, CLUSTER-TYPE aware (matrix: clusters/ x addons/)
+
+clusters/                        # cluster registry — single source of cluster identity
+  <cluster>/config.yaml          #   cloud + role (+ optional addonOverrides version pins)
+
+addons/
+  _base/<addon>/values.yaml            # fleet-wide addon values (define once)
+  all/<addon>/config.yaml              # runs on EVERY cluster        (chart repo/version/ns)
+  roles/<role>/<addon>/config.yaml     # runs on every <role> cluster (+ optional values.yaml)
+  clouds/<cloud>/<addon>/config.yaml   # runs on every <cloud> cluster (+ optional values.yaml)
+  clusters/<cluster>/<addon>/values.yaml  # per-cluster value escape hatch   [optional]
 
 tenants/
   _base/values.yaml                    # global defaults (all clusters, all tenants)
@@ -20,25 +42,35 @@ tenants/
     config.yaml                        # chart source ref (read by the generator)
     values.yaml                        # per-tenant override (image.tag lives here)
 
-addons/
-  <cluster>/<addon>/
-    config.yaml                        # upstream chart repo/chart/version + namespace + syncWave
-    values.yaml                        # helm values for the add-on
+powergrader/
+  <cluster>/<env>/<app>/{config.yaml,values.yaml}
 ```
 
-- **Cluster is in the path.** Both appsets take the target cluster from the
-  `<cluster>` path segment (`destination.name`) and deploy there via the hub.
-  The tenant directory is the bare tenant id (e.g. `acme`); its namespace is
+- **Cluster is in the path.** The tenant/powergrader appsets take the target
+  cluster from the `<cluster>` path segment; the addons appset takes it from the
+  registry entry. Tenant dirs use the bare tenant id (e.g. `acme`); namespace is
   `tenant-<id>`.
-- **Grow by data, not appsets.** Add a cluster = register a cluster `Secret` in
-  the hub. Add a tenant/add-on = add a directory. Move a tenant to another
-  cluster = move its directory. There is never a per-cluster appset.
+- **Grow by data, not appsets.** Onboard a cluster = 1 registry file + 1 cluster
+  `Secret` in the hub — all addons for its role/cloud follow automatically.
+  Add a tenant = add a directory. Add an addon to every satellite = 1 file under
+  `addons/roles/satellite/`. There is never a per-cluster appset.
+- **Per-cluster version pin** (canary / hold-back): `addonOverrides.<addon>.chartVersion`
+  in that cluster's registry file. It wins over the tier config's `chartVersion`.
 
 ## Values precedence (last wins)
 
 Assembled by ArgoCD multi-source `valueFiles` (`ignoreMissingValueFiles: true`,
-so the optional `_base` tiers are skipped when absent):
+so optional tiers are skipped when absent).
 
+Add-ons:
+```
+chart defaults
+→ addons/_base/<addon>/values.yaml               fleet-wide
+→ addons/{all|roles/<role>|clouds/<cloud>}/<addon>/values.yaml   tier-level
+→ addons/clusters/<cluster>/<addon>/values.yaml  per-cluster
+```
+
+Tenants:
 ```
 chart defaults
 → tenants/_base/values.yaml                      global
@@ -48,12 +80,11 @@ chart defaults
 → tenants/<cluster>/<tenant>/<app>/values.yaml   per-tenant
 ```
 
-A fleet-wide change is **one edit** to `tenants/_base`; a cluster-wide change is
-one edit to `tenants/<cluster>/_base` — DRY without templating.
+A fleet-wide change is **one edit** to `_base`; a role/cloud-wide change is one
+edit to that tier — DRY without templating.
 
-> `_base` directories contain **no `config.yaml`**, so the generators
-> (`tenants/*/*/*/config.yaml`, `addons/*/*/config.yaml`) never turn them into
-> Applications — they are pure value layers.
+> `_base` directories contain **no `config.yaml`**, so the generators never turn
+> them into Applications — they are pure value layers.
 
 ## Who writes here
 Only the DevOps-owned reusable workflows (via a token), never engineers directly.

@@ -14,7 +14,7 @@ spec:
   generators:
     - git:
         repoURL: https://github.com/kanzalqalandri/platform-config
-        revision: HEAD
+        revision: main
         files:
           - path: "powergrader/*/*/*/config.yaml"   # powergrader/<cluster>/<env>/<app>/config.yaml
   template:
@@ -37,7 +37,7 @@ spec:
               - "$values/powergrader/_base/{{index .path.segments 3}}/values.yaml"
               - "$values/{{.path.path}}/values.yaml"
         - repoURL: https://github.com/kanzalqalandri/platform-config
-          targetRevision: HEAD
+          targetRevision: main
           ref: values
       destination:
         name: "{{index .path.segments 1}}"                # cluster from the path

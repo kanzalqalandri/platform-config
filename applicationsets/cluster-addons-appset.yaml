@@ -1,12 +1,27 @@
-# Cluster ADD-ON plane — mirrors the tenants layout: addons/<cluster>/<addon>/.
-# One appset for the whole fleet, applied to the central hub. Each
-# addons/<cluster>/<addon>/config.yaml becomes one Application, sourced from an
-# UPSTREAM Helm chart with our values layered on top (common _base + optional
-# per-cluster override), deployed to the cluster named in the path.
-#   Enable an add-on on a cluster = add addons/<cluster>/<addon>/config.yaml
-#   Common values (define once)   = addons/_base/<addon>/values.yaml
-#   Per-cluster override (opt.)   = addons/<cluster>/<addon>/values.yaml
-#   Pin a per-cluster version     = chartVersion in that cluster's config.yaml
+# Cluster ADD-ON plane — CLUSTER-TYPE aware. What runs on a cluster is derived
+# from its entry in the clusters/ registry (cloud + role), not from per-cluster
+# addon directories:
+#
+#   clusters/<cluster>/config.yaml              -> {cloud, role, addonOverrides?}
+#   addons/all/<addon>/config.yaml              -> runs on EVERY cluster
+#   addons/roles/<role>/<addon>/config.yaml     -> runs on every cluster of that role
+#   addons/clouds/<cloud>/<addon>/config.yaml   -> runs on every cluster of that cloud
+#
+# The matrix generator joins them: child 1 emits one param set per cluster;
+# child 2's file patterns are TEMPLATED with child 1's {role, cloud}, so each
+# cluster only picks up the addon sets that apply to it.
+#
+#   Onboard a cluster              = 1 registry file + 1 cluster Secret in the hub
+#   Add an addon to all satellites = 1 file under addons/roles/satellite/
+#   Pin a version on ONE cluster   = addonOverrides.<addon>.chartVersion in its registry file
+#
+# Values precedence (last wins), assembled via ignoreMissingValueFiles:
+#   addons/_base/<addon>/values.yaml                 fleet-wide (define once)
+#   <dir of the matched config.yaml>/values.yaml     tier-level (all / role / cloud)
+#   addons/clusters/<cluster>/<addon>/values.yaml    per-cluster escape hatch
+#
+# NOTE: goTemplateOptions missingkey=error is deliberately OMITTED — the
+# addonOverrides key in registry files is optional.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -14,41 +29,54 @@ metadata:
   namespace: argocd
 spec:
   goTemplate: true
-  goTemplateOptions: ["missingkey=error"]
   generators:
-    - git:
-        repoURL: https://github.com/kanzalqalandri/platform-config
-        revision: HEAD
-        files:
-          - path: "addons/*/*/config.yaml"     # addons/<cluster>/<addon>/config.yaml (_base has no config.yaml, so it is skipped)
+    - matrix:
+        generators:
+          # 1) cluster registry: one param set per cluster -> {cloud, role, addonOverrides?}
+          - git:
+              repoURL: https://github.com/kanzalqalandri/platform-config
+              revision: main
+              pathParamPrefix: cluster     # both children are git file gens; keeps their .path params distinct
+              files:
+                - path: "clusters/*/config.yaml"
+          # 2) the addon sets that apply to THAT cluster (paths templated from child 1)
+          - git:
+              repoURL: https://github.com/kanzalqalandri/platform-config
+              revision: main
+              files:
+                - path: "addons/all/*/config.yaml"
+                - path: "addons/roles/{{.role}}/*/config.yaml"
+                - path: "addons/clouds/{{.cloud}}/*/config.yaml"
   template:
     metadata:
-      # segments: 0=addons 1=<cluster> 2=<addon>
-      name: "addon-{{index .path.segments 1}}-{{index .path.segments 2}}"
+      # cluster name = registry dir basename; addon name = config.yaml dir basename
+      name: "addon-{{.cluster.path.basename}}-{{.path.basename}}"
       annotations:
-        argocd.argoproj.io/sync-wave: "{{.syncWave}}"
+        argocd.argoproj.io/sync-wave: '{{.syncWave | default "0"}}'
       finalizers:
         - resources-finalizer.argocd.argoproj.io
     spec:
       project: default
       sources:
-        # Source 1: upstream Helm chart (repo/chart/version from config.yaml)
+        # Source 1: upstream Helm chart (repo/chart/version from the addon's config.yaml)
         - repoURL: "{{.chartRepo}}"
           chart: "{{.chart}}"
-          targetRevision: "{{.chartVersion}}"
+          # tier default, unless this cluster's registry file pins the addon
+          targetRevision: '{{ dig .path.basename "chartVersion" .chartVersion (.addonOverrides | default dict) }}'
           helm:
-            # base file is required; per-cluster override is optional
+            # only the _base file is expected to exist; the rest are optional layers
             ignoreMissingValueFiles: true
             valueFiles:
               # ordered low -> high precedence (last wins)
-              - "$values/addons/_base/{{index .path.segments 2}}/values.yaml"                          # common per-addon (define once)
-              - "$values/addons/{{index .path.segments 1}}/{{index .path.segments 2}}/values.yaml"     # per-cluster override
+              - "$values/addons/_base/{{.path.basename}}/values.yaml"
+              - "$values/{{.path.path}}/values.yaml"
+              - "$values/addons/clusters/{{.cluster.path.basename}}/{{.path.basename}}/values.yaml"
         # Source 2: our values repo (ref only — a ref source must not set chart)
         - repoURL: https://github.com/kanzalqalandri/platform-config
-          targetRevision: HEAD
+          targetRevision: main
           ref: values
       destination:
-        name: "{{index .path.segments 1}}"       # route to the cluster in the path
+        name: "{{.cluster.path.basename}}"   # route to the cluster from the registry path
         namespace: "{{.namespace}}"
       syncPolicy:
         automated:
@@ -56,4 +84,4 @@ spec:
           selfHeal: true
         syncOptions:
           - CreateNamespace=true
-          - ServerSideApply=true                 # required: large CRDs (cert-manager) exceed the annotation limit
+          - ServerSideApply=true             # required: large CRDs (cert-manager) exceed the annotation limit
