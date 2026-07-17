@@ -6,6 +6,12 @@
 #   addons/all/<addon>/config.yaml              -> runs on EVERY cluster
 #   addons/roles/<role>/<addon>/config.yaml     -> runs on every cluster of that role
 #   addons/clouds/<cloud>/<addon>/config.yaml   -> runs on every cluster of that cloud
+#   addons/only/<cluster>/<app>/config.yaml     -> ONE-OFF: runs on that ONE named cluster
+#
+# The all/role/cloud/only tiers are a specificity ladder (least -> most specific);
+# "only" is the most-specific rung: placement by cluster NAME, for a platform/ops
+# component that belongs on exactly one cluster. Do NOT abuse roles/ for this — a
+# second cluster of that role would silently pick the app up too.
 #
 # The matrix generator joins them: child 1 emits one param set per cluster;
 # child 2's file patterns are TEMPLATED with child 1's {role, cloud}, so each
@@ -17,8 +23,10 @@
 #
 # Values precedence (last wins), assembled via ignoreMissingValueFiles:
 #   addons/_base/<addon>/values.yaml                 fleet-wide (define once)
-#   <dir of the matched config.yaml>/values.yaml     tier-level (all / role / cloud)
+#   <dir of the matched config.yaml>/values.yaml     tier-level (all / role / cloud / only)
 #   addons/clusters/<cluster>/<addon>/values.yaml    per-cluster escape hatch
+# (For an "only" one-off, its values.yaml lives next to its config.yaml, so the
+#  tier-level entry above already picks it up.)
 #
 # NOTE: goTemplateOptions missingkey=error is deliberately OMITTED — the
 # addonOverrides key in registry files is optional.
@@ -47,6 +55,7 @@ spec:
                 - path: "addons/all/*/config.yaml"
                 - path: "addons/roles/{{.role}}/*/config.yaml"
                 - path: "addons/clouds/{{.cloud}}/*/config.yaml"
+                - path: "addons/only/{{.cluster.path.basename}}/*/config.yaml"   # one-off: this cluster only
   template:
     metadata:
       # cluster name = registry dir basename; addon name = config.yaml dir basename
