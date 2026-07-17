@@ -1,8 +1,0 @@
-# Values for the one-off reloader on gitops-c3. Sits next to its config.yaml and
-# is picked up by the tier-level ($values/{{.path.path}}/values.yaml) ladder entry.
-reloader:
-  deployment:
-    resources:
-      requests:
-        cpu: 10m
-        memory: 32Mi

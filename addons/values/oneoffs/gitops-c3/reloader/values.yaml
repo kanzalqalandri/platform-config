@@ -1,0 +1,8 @@
+# Values for the one-off reloader on gitops-c3 (charts/oneoffs/gitops-c3/reloader).
+# Tier-level layer, mirroring the chart path under addons/values/.
+reloader:
+  deployment:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi

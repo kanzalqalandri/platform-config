@@ -1,12 +1,14 @@
-# Cluster ADD-ON plane — CLUSTER-TYPE aware. What runs on a cluster is derived
-# from its entry in the clusters/ registry (cloud + role), not from per-cluster
-# addon directories:
+# Cluster ADD-ON plane — CLUSTER-TYPE aware. addons/ is split by CONCERN:
+#   addons/charts/   -> WHAT runs & WHERE (config.yaml: chart repo/version/ns)
+#   addons/values/   -> HOW it's tuned    (values.yaml only)
+# What runs on a cluster is derived from its entry in the clusters/ registry
+# (cloud + role), joined with the charts/ placement tiers:
 #
-#   clusters/<cluster>/config.yaml              -> {cloud, role, addonOverrides?}
-#   addons/fleet/<addon>/config.yaml              -> runs on EVERY cluster
-#   addons/roles/<role>/<addon>/config.yaml     -> runs on every cluster of that role
-#   addons/clouds/<cloud>/<addon>/config.yaml   -> runs on every cluster of that cloud
-#   addons/oneoffs/<cluster>/<app>/config.yaml     -> ONE-OFF: runs on that ONE named cluster
+#   clusters/<cluster>/config.yaml                     -> {cloud, role, addonOverrides?}
+#   addons/charts/fleet/<addon>/config.yaml            -> runs on EVERY cluster
+#   addons/charts/roles/<role>/<addon>/config.yaml     -> runs on every cluster of that role
+#   addons/charts/clouds/<cloud>/<addon>/config.yaml   -> runs on every cluster of that cloud
+#   addons/charts/oneoffs/<cluster>/<app>/config.yaml  -> ONE-OFF: runs on that ONE named cluster
 #
 # The fleet/role/cloud/oneoffs tiers are a specificity ladder (least -> most specific);
 # "oneoffs" is the most-specific rung: placement by cluster NAME, for a platform/ops
@@ -18,15 +20,15 @@
 # cluster only picks up the addon sets that apply to it.
 #
 #   Onboard a cluster              = 1 registry file + 1 cluster Secret in the hub
-#   Add an addon to all satellites = 1 file under addons/roles/satellite/
+#   Add an addon to all satellites = 1 file under addons/charts/roles/satellite/
 #   Pin a version on ONE cluster   = addonOverrides.<addon>.chartVersion in its registry file
 #
-# Values precedence (last wins), assembled via ignoreMissingValueFiles:
-#   addons/_base/<addon>/values.yaml                 fleet-wide (define once)
-#   <dir of the matched config.yaml>/values.yaml     tier-level (fleet / role / cloud / oneoffs)
-#   addons/overrides/<cluster>/<addon>/values.yaml per-cluster escape hatch
-# (For a "oneoffs" one-off, its values.yaml lives next to its config.yaml, so the
-#  tier-level entry above already picks it up.)
+# Values precedence (last wins), assembled via ignoreMissingValueFiles. Every layer
+# lives under addons/values/, mirroring the charts/ tiers:
+#   addons/values/defaults/<addon>/values.yaml            addon defaults (define once)
+#   addons/values/<same tier path as the chart>/values.yaml   tier-level (fleet/role/cloud/oneoffs)
+#   addons/values/clusters/<cluster>/<addon>/values.yaml  per-cluster escape hatch
+# (The tier-level path is the chart's own dir with addons/charts/ swapped to addons/values/.)
 #
 # NOTE: goTemplateOptions missingkey=error is deliberately OMITTED — the
 # addonOverrides key in registry files is optional.
@@ -52,10 +54,10 @@ spec:
               repoURL: https://github.com/kanzalqalandri/platform-config
               revision: main
               files:
-                - path: "addons/fleet/*/config.yaml"
-                - path: "addons/roles/{{.role}}/*/config.yaml"
-                - path: "addons/clouds/{{.cloud}}/*/config.yaml"
-                - path: "addons/oneoffs/{{.cluster.path.basename}}/*/config.yaml"   # one-off: this cluster only
+                - path: "addons/charts/fleet/*/config.yaml"
+                - path: "addons/charts/roles/{{.role}}/*/config.yaml"
+                - path: "addons/charts/clouds/{{.cloud}}/*/config.yaml"
+                - path: "addons/charts/oneoffs/{{.cluster.path.basename}}/*/config.yaml"   # one-off: this cluster only
   template:
     metadata:
       # cluster name = registry dir basename; addon name = config.yaml dir basename
@@ -73,13 +75,14 @@ spec:
           # tier default, unless this cluster's registry file pins the addon
           targetRevision: '{{ dig .path.basename "chartVersion" .chartVersion (.addonOverrides | default dict) }}'
           helm:
-            # only the _base file is expected to exist; the rest are optional layers
+            # every value file is optional (ignoreMissingValueFiles); layers absent for
+            # a given addon are simply skipped
             ignoreMissingValueFiles: true
             valueFiles:
-              # ordered low -> high precedence (last wins)
-              - "$values/addons/_base/{{.path.basename}}/values.yaml"
-              - "$values/{{.path.path}}/values.yaml"
-              - "$values/addons/overrides/{{.cluster.path.basename}}/{{.path.basename}}/values.yaml"
+              # ordered low -> high precedence (last wins). All under addons/values/.
+              - "$values/addons/values/defaults/{{.path.basename}}/values.yaml"                                # addon defaults
+              - '$values/{{ .path.path | replace "addons/charts/" "addons/values/" }}/values.yaml'            # tier-level (mirrors the chart path)
+              - "$values/addons/values/clusters/{{.cluster.path.basename}}/{{.path.basename}}/values.yaml"     # per-cluster
         # Source 2: our values repo (ref only — a ref source must not set chart)
         - repoURL: https://github.com/kanzalqalandri/platform-config
           targetRevision: main

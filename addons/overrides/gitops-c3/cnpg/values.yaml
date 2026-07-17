@@ -1,5 +1,0 @@
-# Per-cluster override for cnpg on gitops-c3 (layered over addons/_base/cnpg).
-resources:
-  requests:
-    cpu: 125m
-    memory: 264Mi

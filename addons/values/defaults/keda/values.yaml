@@ -1,5 +1,5 @@
 # Common KEDA values for the whole fleet. Chart installs its CRDs by default.
-# Per-cluster overrides go in addons/overrides/<cluster>/keda/values.yaml (layered on top).
+# Per-cluster overrides go in addons/values/clusters/<cluster>/keda/values.yaml (layered on top).
 resources:
   operator:
     requests:

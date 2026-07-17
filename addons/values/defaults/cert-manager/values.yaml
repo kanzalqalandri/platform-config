@@ -1,5 +1,5 @@
 # Common cert-manager values for the whole fleet. Per-cluster overrides go in
-# addons/overrides/<cluster>/cert-manager/values.yaml (layered on top of this).
+# addons/values/clusters/<cluster>/cert-manager/values.yaml (layered on top of this).
 crds:
   enabled: true          # let the chart manage its CRDs (paired with ServerSideApply)
 resources:
