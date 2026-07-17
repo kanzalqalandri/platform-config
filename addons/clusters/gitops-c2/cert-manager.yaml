@@ -1,3 +1,0 @@
-enabled: true
-values:
-  replicaCount: 2      # per-cluster override, inline

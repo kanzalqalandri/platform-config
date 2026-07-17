@@ -1,4 +1,5 @@
-# Helm values for cert-manager on gitops-c2.
+# Common cert-manager values for the whole fleet. Per-cluster overrides go in
+# addons/<cluster>/cert-manager/values.yaml (layered on top of this).
 crds:
   enabled: true          # let the chart manage its CRDs (paired with ServerSideApply)
 resources:
