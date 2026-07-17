@@ -5,17 +5,27 @@ registered into it. Once ArgoCD is installed on the hub, apply the appsets:
 
 ```bash
 kubectl apply -n argocd -f ../applicationsets/tenants-appset.yaml
+kubectl apply -n argocd -f ../applicationsets/powergrader-appset.yaml
 kubectl apply -n argocd -f ../applicationsets/cluster-addons-appset.yaml
 ```
 
-To add a spoke cluster, register it in the hub (a cluster `Secret` labelled
-`argocd.argoproj.io/secret-type: cluster`, named e.g. `gitops-c2`) — see the
-`argocd-manager` ServiceAccount pattern used for c2/c3.
+## Onboarding a cluster — TWO things must exist
+
+1. A **registry file** `clusters/<cluster>/config.yaml` declaring `cloud` + `role`
+   (this is what decides which add-ons it runs).
+2. A **cluster Secret** in the hub's `argocd` namespace, named exactly like the
+   registry dir (label `argocd.argoproj.io/secret-type: cluster`) — see the
+   `argocd-manager` ServiceAccount pattern used for c2/c3.
+
+If the registry file exists without the Secret, its generated Applications stick
+on "cluster not found". If the Secret exists without the registry file, the
+cluster gets no add-ons (tenants/powergrader still work — they route by path).
 
 The generators then auto-discover work:
-- `tenants/<cluster>/<tenant>/<app>/config.yaml` → one Application per tenant/app,
-  deployed to the cluster named in the path.
-- `addons/<cluster>/<addon>/config.yaml` → one Application per add-on.
+- `clusters/<cluster>/config.yaml` × `addons/{all,roles/<role>,clouds/<cloud>}/<addon>/config.yaml`
+  → one Application per (cluster, applicable addon).
+- `tenants/<cluster>/<tenant>/<app>/config.yaml` → one Application per tenant/app.
+- `powergrader/<cluster>/<env>/<app>/config.yaml` → one Application per env/app.
 
-Adding a tenant/add-on = add a directory; removing one = delete the directory
-(the offboard workflow does this, and ArgoCD cascades the cleanup).
+Adding a tenant/add-on = add a file; removing one = delete it (the offboard
+workflow does this, and ArgoCD cascades the cleanup).

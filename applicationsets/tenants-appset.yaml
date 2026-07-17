@@ -13,7 +13,7 @@ spec:
   generators:
     - git:
         repoURL: https://github.com/kanzalqalandri/platform-config
-        revision: HEAD
+        revision: main
         files:
           - path: "tenants/*/*/*/config.yaml"    # tenants/<cluster>/<tenant>/<app>/config.yaml
   template:
@@ -39,7 +39,7 @@ spec:
               - "$values/tenants/{{index .path.segments 1}}/_base/{{index .path.segments 3}}/values.yaml"  # per-cluster per-app
               - "$values/{{.path.path}}/values.yaml"                                             # per-tenant
         - repoURL: https://github.com/kanzalqalandri/platform-config
-          targetRevision: HEAD
+          targetRevision: main
           ref: values
       destination:
         name: "{{index .path.segments 1}}"          # cluster segment from the path
