@@ -31,6 +31,7 @@ addons/
   all/<addon>/config.yaml              # runs on EVERY cluster        (chart repo/version/ns)
   roles/<role>/<addon>/config.yaml     # runs on every <role> cluster (+ optional values.yaml)
   clouds/<cloud>/<addon>/config.yaml   # runs on every <cloud> cluster (+ optional values.yaml)
+  only/<cluster>/<app>/config.yaml     # ONE-OFF: runs on that ONE named cluster (+ optional values.yaml)
   clusters/<cluster>/<addon>/values.yaml  # per-cluster value escape hatch   [optional]
 
 tenants/
@@ -62,13 +63,16 @@ powergrader/
 Assembled by ArgoCD multi-source `valueFiles` (`ignoreMissingValueFiles: true`,
 so optional tiers are skipped when absent).
 
-Add-ons:
+Add-ons (`all` < `roles/<role>` < `clouds/<cloud>` < `only/<cluster>` — least → most specific placement):
 ```
 chart defaults
 → addons/_base/<addon>/values.yaml               fleet-wide
-→ addons/{all|roles/<role>|clouds/<cloud>}/<addon>/values.yaml   tier-level
+→ addons/{all|roles/<role>|clouds/<cloud>|only/<cluster>}/<addon>/values.yaml   tier-level
 → addons/clusters/<cluster>/<addon>/values.yaml  per-cluster
 ```
+A **one-off** platform component on a single cluster = one `addons/only/<cluster>/<app>/config.yaml`
+(placement by cluster NAME). Do not use `roles/` for this — a second cluster of that
+role would pick it up too.
 
 Tenants:
 ```
