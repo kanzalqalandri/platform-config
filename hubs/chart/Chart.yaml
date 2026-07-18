@@ -1,8 +1,0 @@
-apiVersion: v2
-name: platform-hub
-description: >-
-  The ApplicationSets a regional hub runs, rendered with that hub's region.
-  Every hub installs THIS same chart (via hubs/<region>/root-app.yaml) — the only
-  per-hub difference is the `region` value, which scopes every generator to
-  clusters/<region>/ (and oneoff placements to addons/values/oneoffs/<region>/).
-version: 0.1.0
