@@ -15,14 +15,8 @@ Demo: **dev hub** = ArgoCD on `gitops-c1`, manages `gitops-c2`.
    points at `https://kubernetes.default.svc` (in-cluster) but still carries the
    registry name so `destination.name` routing stays uniform.
 3. Apply the hub's root app ONCE: `kubectl apply -n argocd -f hubs/<region>/root-app.yaml`.
-   From then on the hub self-manages: root app → `hubs/<region>/appsets/` (plain
-   YAML — exactly what runs, no templating) → the 3 ApplicationSets, scoped to
-   `clusters/<region>/`.
-
-**Adding a region** = copy an existing `hubs/<region>/` dir, change the region
-string (globs + comments), apply the root app on the new hub. CI
-(`bin/check-hub-drift.sh`) fails any PR where regions' appsets differ beyond the
-region token — duplication without drift.
+   From then on the hub self-manages: root app → `hubs/chart` (Helm, `region` value)
+   → the 3 ApplicationSets, scoped to `clusters/<region>/`.
 
 ## Onboarding a cluster — TWO things must exist
 

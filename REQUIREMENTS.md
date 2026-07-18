@@ -10,7 +10,7 @@ requirement change lands here in the same PR that implements it.** Status:
 |---|---|---|
 | R1.1 | **Easy to understand** — self-explanatory names, no underscores, folder names state what they hold (`charts`/`values`, `fleet`, `oneoffs`, `defaults`, `clusters`). | ✅ (addons; tenants/powergrader still use `_base`) |
 | R1.2 | **DRY** — anything defined once: fleet-wide change = 1 edit, role/cloud-wide = 1 edit, chart version bump = 1 edit. | ✅ |
-| R1.3 | **All Helm** — every WORKLOAD deploys as a Helm chart. No kustomize, no in-house renderer. (Hub appsets are deliberately NOT templated — see R4.3.) | ✅ |
+| R1.3 | **All Helm** — every workload deploys as a Helm chart; the hub appsets themselves are a Helm chart. No kustomize, no in-house renderer. | ✅ |
 | R1.4 | **Pure state repo** — `platform-config` holds desired state only; no CI writes generated files into it (unlike k8s-gitops `helm_values/`). | ✅ |
 | R1.5 | **Grow by data, not appsets** — onboarding clusters/tenants/addons never adds an ApplicationSet; exactly one appset per plane, rendered per hub. | ✅ |
 
@@ -39,7 +39,7 @@ requirement change lands here in the same PR that implements it.** Status:
 |---|---|---|
 | R4.1 | One ArgoCD per region (us/uk/eu + dev), each managing **its own cluster and its region's clusters** — no global hub. | ✅ (demo: dev hub on c1 → c2; prod hub on c3 → itself) |
 | R4.2 | All hubs reconcile the ONE shared repo; each generates only its region's slice (registry glob `clusters/<region>/`). | ✅ |
-| R4.3 | Hub appsets are PLAIN YAML per region (`hubs/<region>/appsets/` — readable exactly as ArgoCD runs them; no templating layer). Duplication is guarded by `bin/check-hub-drift.sh` (CI): regions must be identical modulo the region token. Bootstrapped by `hubs/<region>/root-app.yaml` (app-of-apps, self-managed). | ✅ |
+| R4.3 | Hub appsets defined once as a Helm chart (`hubs/chart`), `region` is the only per-hub value; bootstrapped by `hubs/<region>/root-app.yaml` (app-of-apps, self-managed thereafter). | ✅ |
 | R4.4 | A hub holds credentials ONLY for its own region's clusters (blast radius / data sovereignty). | ✅ |
 | R4.5 | Moving a cluster between regions = `git mv` the registry dir + move the Secret (+ oneoff placements). | ✅ (runbook in bootstrap/README) |
 
@@ -60,7 +60,7 @@ requirement change lands here in the same PR that implements it.** Status:
 | R6.3 | Structural appset changes are spike-verified first (no-sync copy on a branch) before cutover. | ✅ (working practice) |
 | R6.4 | Git webhook → hubs (kill the cache-bust runbook; ×N hubs now). | 📋 |
 | R6.5 | Per-plane AppProjects — tenants plane must not be able to target mgmt/other-region clusters. | 📋 |
-| R6.6 | CI checks: hub-appset cross-region drift (✅ `check-hub-drift.yml`); registry file ⇄ hub Secret consistency (📋); `_`-free naming (📋). | 🚧 |
+| R6.6 | CI checks: registry file ⇄ hub Secret consistency; `_`-free naming; a moved path never leaves stale references. | 📋 |
 
 ## R7 — Deferred / known debt
 
