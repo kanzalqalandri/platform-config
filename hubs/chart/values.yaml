@@ -1,0 +1,6 @@
+# The hub's region — REQUIRED. Set by hubs/<region>/root-app.yaml.
+# Scopes all generators to clusters/<region>/*/config.yaml.
+region: ""
+# The config repo all generators read (one shared repo for every hub).
+repoURL: https://github.com/kanzalqalandri/platform-config
+revision: main

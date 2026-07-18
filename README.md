@@ -1,30 +1,40 @@
 # platform-config
 
 **Pure-state** config repo for the [GitOps Platform Design v2](https://apportoteam.atlassian.net/wiki/spaces/DevOps/pages/2250047490).
-No templates, no rendering engine — just the desired state, in git. A **central
-(hub) ArgoCD** on `gitops-c1` reconciles it onto the registered spoke clusters.
+No in-house rendering engine — just the desired state, in git. **Regional hub
+ArgoCDs** (one per region, each managing its own region's clusters — including
+itself) all reconcile from this ONE shared repo; each hub only generates the
+slice scoped to its region.
 
-## Cluster types
+See [REQUIREMENTS.md](REQUIREMENTS.md) for the maintained list of platform requirements.
 
-Every cluster has two identity axes, declared once in the **cluster registry**:
+## Cluster identity
 
-| axis | values |
-|---|---|
-| `cloud` | `aws`, `azure` |
-| `role` | `primary`, `satellite`, `mgmt` |
+Two axes as file **content**, one axis as the **path**:
 
-Demo fleet: `gitops-c2` = `{aws, satellite}` (dev/qa), `gitops-c3` = `{aws, primary}` (prod).
+| axis | where | values |
+|---|---|---|
+| `region` (which hub owns it) | **path**: `clusters/<region>/<cluster>/` | `us`, `uk`, `eu`, `dev` (demo: `dev`, `prod`) |
+| `cloud` | file content | `aws`, `azure` |
+| `role` | file content | `primary`, `satellite`, `mgmt` |
+
+> **The law:** generators can **select by path** but only **read content**.
+> Anything deciding *which* apps a hub generates (region/ownership, placement)
+> must be a path segment; anything describing *how* (cloud, role, version pins)
+> lives in file content.
+
+Demo fleet: `clusters/dev/gitops-c2` = `{aws, satellite}` (managed by the dev hub on c1),
+`clusters/prod/gitops-c3` = `{aws, primary}` (managed by the prod hub on c3 itself).
 
 ## Layout
 
 ```
-applicationsets/
-  tenants-appset.yaml            # tenant apps   (reads tenants/<cluster>/<tenant>/<app>)
-  powergrader-appset.yaml        # powergrader   (reads powergrader/<cluster>/<env>/<app>)
-  cluster-addons-appset.yaml     # add-ons, CLUSTER-TYPE aware (matrix: clusters/ x addons/)
+hubs/
+  chart/                         # ONE Helm chart of the 3 ApplicationSets; `region` is a value
+  <region>/root-app.yaml         # per-hub bootstrap Application (app-of-apps; region set here)
 
 clusters/                        # cluster registry — single source of cluster identity
-  <cluster>/config.yaml          #   cloud + role (+ optional addonOverrides version pins)
+  <region>/<cluster>/config.yaml #   region in the PATH; cloud + role (+ addonOverrides pins) in content
 
 addons/                                # split by CONCERN — charts/ (what & where) vs values/ (how)
   charts/
@@ -35,7 +45,7 @@ addons/                                # split by CONCERN — charts/ (what & wh
   values/
     defaults/<addon>/values.yaml       # addon defaults (define once)
     <mirror of the chart's tier path>/values.yaml   # tier-level values (optional)
-    oneoffs/<cluster>/<chart>/values.yaml   # PLACES a one-off chart on <cluster> (+ its values)
+    oneoffs/<region>/<cluster>/<chart>/values.yaml  # PLACES a one-off chart on <cluster> (+ its values)
     clusters/<cluster>/<addon>/values.yaml  # per-cluster override of a tier addon  [optional]
 
 tenants/
@@ -77,7 +87,7 @@ chart defaults
 (The tier-level file is the chart's own path with `addons/charts/` swapped to `addons/values/`.)
 
 **One-offs** are separate: the chart is defined once in `addons/charts/oneoffs/<chart>/config.yaml`,
-and it deploys to **each cluster that has a placement file** `addons/values/oneoffs/<cluster>/<chart>/values.yaml`.
+and it deploys to **each cluster that has a placement file** `addons/values/oneoffs/<region>/<cluster>/<chart>/values.yaml`.
 Add a target cluster = drop another placement file; bump the version = edit the one chart file.
 For a *type* of cluster use `roles/`/`clouds/` instead — one-offs are for named, explicit placement.
 

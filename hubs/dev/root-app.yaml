@@ -1,0 +1,24 @@
+# Bootstrap for the DEV hub (ArgoCD on gitops-c1, manages the dev region).
+# Apply ONCE with kubectl on the hub; from then on the hub self-manages its
+# ApplicationSets from git via this app-of-apps.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: hub-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/kanzalqalandri/platform-config
+    targetRevision: main
+    path: hubs/chart
+    helm:
+      values: |
+        region: dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
