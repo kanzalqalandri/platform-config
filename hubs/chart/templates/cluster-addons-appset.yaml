@@ -1,0 +1,100 @@
+# Add-on plane, scoped to THIS hub's region ({{ .Values.region }}).
+# Same semantics as before regional hubs — child-1 is just region-scoped now.
+# NOTE: backtick-quoted {{ `...` }} strings are ArgoCD goTemplate expressions,
+# passed through Helm untouched.
+{{- if not .Values.region }}{{ fail "region is required" }}{{- end }}
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: cluster-addons
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    # ---- tier add-ons: registry join, clusters selected by TYPE ----
+    - matrix:
+        generators:
+          # 1) this REGION's cluster registry -> {cloud, role, addonOverrides?}
+          - git:
+              repoURL: {{ .Values.repoURL }}
+              revision: {{ .Values.revision }}
+              pathParamPrefix: cluster
+              files:
+                - path: "clusters/{{ .Values.region }}/*/config.yaml"
+          # 2) the addon sets that apply to THAT cluster (paths templated from child 1)
+          - git:
+              repoURL: {{ .Values.repoURL }}
+              revision: {{ .Values.revision }}
+              files:
+                - path: "addons/charts/fleet/*/config.yaml"
+                - path: {{ `addons/charts/roles/{{.role}}/*/config.yaml` | quote }}
+                - path: {{ `addons/charts/clouds/{{.cloud}}/*/config.yaml` | quote }}
+    # ---- one-offs: chart defined once, placed by values-side path ----
+    - matrix:
+        generators:
+          - git:                       # the chart, once — no cluster in the path
+              repoURL: {{ .Values.repoURL }}
+              revision: {{ .Values.revision }}
+              files:
+                - path: "addons/charts/oneoffs/*/config.yaml"
+          - git:                       # placement files for THIS region's clusters
+              repoURL: {{ .Values.repoURL }}
+              revision: {{ .Values.revision }}
+              pathParamPrefix: place
+              files:
+                - path: {{ printf `addons/values/oneoffs/%s/*/{{.path.basename}}/values.yaml` .Values.region | quote }}
+        template:
+          metadata:
+            # placement path: addons/values/oneoffs/<region>/<cluster>/<chart> -> cluster = segment 4
+            name: {{ `addon-{{index .place.path.segments 4}}-{{.path.basename}}` | quote }}
+          spec:
+            project: default              # required by the CRD on a generator-level template
+            sources:
+              - repoURL: {{ `{{.chartRepo}}` | quote }}
+                chart: {{ `{{.chart}}` | quote }}
+                targetRevision: {{ `{{.chartVersion}}` | quote }}
+                helm:
+                  ignoreMissingValueFiles: true
+                  valueFiles:
+                    - {{ `$values/addons/values/defaults/{{.path.basename}}/values.yaml` | quote }}
+                    - {{ `$values/{{.place.path.path}}/values.yaml` | quote }}
+              - repoURL: {{ .Values.repoURL }}
+                targetRevision: {{ .Values.revision }}
+                ref: values
+            destination:
+              name: {{ `{{index .place.path.segments 4}}` | quote }}
+              namespace: {{ `{{.namespace}}` | quote }}
+  template:
+    metadata:
+      name: {{ `addon-{{.cluster.path.basename}}-{{.path.basename}}` | quote }}
+      annotations:
+        argocd.argoproj.io/sync-wave: {{ `{{.syncWave | default "0"}}` | quote }}
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      sources:
+        - repoURL: {{ `{{.chartRepo}}` | quote }}
+          chart: {{ `{{.chart}}` | quote }}
+          # tier default, unless this cluster's registry file pins the addon
+          targetRevision: {{ `{{ dig .path.basename "chartVersion" .chartVersion (.addonOverrides | default dict) }}` | quote }}
+          helm:
+            ignoreMissingValueFiles: true
+            valueFiles:
+              # ordered low -> high precedence (last wins). All under addons/values/.
+              - {{ `$values/addons/values/defaults/{{.path.basename}}/values.yaml` | quote }}
+              - {{ `$values/{{ .path.path | replace "addons/charts/" "addons/values/" }}/values.yaml` | quote }}
+              - {{ `$values/addons/values/clusters/{{.cluster.path.basename}}/{{.path.basename}}/values.yaml` | quote }}
+        - repoURL: {{ .Values.repoURL }}
+          targetRevision: {{ .Values.revision }}
+          ref: values
+      destination:
+        name: {{ `{{.cluster.path.basename}}` | quote }}
+        namespace: {{ `{{.namespace}}` | quote }}
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true             # large CRDs (cert-manager) exceed the annotation limit
