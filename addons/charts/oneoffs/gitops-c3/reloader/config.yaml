@@ -1,9 +1,0 @@
-# ONE-OFF ops component — runs on gitops-c3 (prod primary) ONLY, by name.
-# Placed under addons/only/<cluster>/ so no other cluster ever picks it up.
-# Stakater Reloader rolls Deployments/StatefulSets when their ConfigMaps or
-# Secrets change — wanted on the prod cluster, not the dev/qa satellite.
-chartRepo: https://stakater.github.io/stakater-charts
-chart: reloader
-chartVersion: 2.2.14
-namespace: reloader
-syncWave: "0"

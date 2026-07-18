@@ -8,12 +8,14 @@
 #   addons/charts/fleet/<addon>/config.yaml            -> runs on EVERY cluster
 #   addons/charts/roles/<role>/<addon>/config.yaml     -> runs on every cluster of that role
 #   addons/charts/clouds/<cloud>/<addon>/config.yaml   -> runs on every cluster of that cloud
-#   addons/charts/oneoffs/<cluster>/<app>/config.yaml  -> ONE-OFF: runs on that ONE named cluster
+#   addons/charts/oneoffs/<chart>/config.yaml          -> ONE-OFF chart, defined ONCE (no cluster here)
+#     + addons/values/oneoffs/<cluster>/<chart>/values.yaml  -> PLACES it on <cluster>
 #
-# The fleet/role/cloud/oneoffs tiers are a specificity ladder (least -> most specific);
-# "oneoffs" is the most-specific rung: placement by cluster NAME, for a platform/ops
-# component that belongs on exactly one cluster. Do NOT abuse roles/ for this — a
-# second cluster of that role would silently pick the app up too.
+# fleet/role/cloud select clusters by TYPE (registry join). oneoffs are different:
+# the chart is defined once, and WHERE it runs is the set of clusters that have a
+# placement file under addons/values/oneoffs/<cluster>/<chart>/. Target another
+# cluster = drop another placement file; bump the version = edit the one chart file.
+# (Handled by a SECOND, dedicated matrix generator below — not the registry join.)
 #
 # The matrix generator joins them: child 1 emits one param set per cluster;
 # child 2's file patterns are TEMPLATED with child 1's {role, cloud}, so each
@@ -57,7 +59,45 @@ spec:
                 - path: "addons/charts/fleet/*/config.yaml"
                 - path: "addons/charts/roles/{{.role}}/*/config.yaml"
                 - path: "addons/charts/clouds/{{.cloud}}/*/config.yaml"
-                - path: "addons/charts/oneoffs/{{.cluster.path.basename}}/*/config.yaml"   # one-off: this cluster only
+    # ONE-OFFS: chart defined ONCE (charts/oneoffs/<chart>), placed by the VALUES-side
+    # path. Deploys to each cluster that has a values/oneoffs/<cluster>/<chart>/ file.
+    # A separate matrix (not the registry join) with its own template override; the
+    # target cluster is read from the placement file's PATH, not the cluster registry.
+    - matrix:
+        generators:
+          - git:                       # the chart, once — no cluster in the path
+              repoURL: https://github.com/kanzalqalandri/platform-config
+              revision: main
+              files:
+                - path: "addons/charts/oneoffs/*/config.yaml"
+          - git:                       # placement: one file per target cluster (path carries the cluster)
+              repoURL: https://github.com/kanzalqalandri/platform-config
+              revision: main
+              pathParamPrefix: place   # its path params -> .place.* (avoids collision with the chart child's .path)
+              files:
+                # {{.path.basename}} = chart name from child 1, so only that chart's placements match
+                - path: "addons/values/oneoffs/*/{{.path.basename}}/values.yaml"
+        template:
+          metadata:
+            # cluster = segment 3 of the placement path; chart = basename of the chart-def path
+            name: "addon-{{index .place.path.segments 3}}-{{.path.basename}}"
+          spec:
+            project: default              # required by the CRD on a generator-level template
+            sources:
+              - repoURL: "{{.chartRepo}}"
+                chart: "{{.chart}}"
+                targetRevision: "{{.chartVersion}}"   # one-offs pin their own version in the chart def
+                helm:
+                  ignoreMissingValueFiles: true
+                  valueFiles:
+                    - "$values/addons/values/defaults/{{.path.basename}}/values.yaml"   # chart defaults (optional)
+                    - "$values/{{.place.path.path}}/values.yaml"                        # the placement file = per-cluster values
+              - repoURL: https://github.com/kanzalqalandri/platform-config
+                targetRevision: main
+                ref: values
+            destination:
+              name: "{{index .place.path.segments 3}}"   # target cluster from the placement path
+              namespace: "{{.namespace}}"
   template:
     metadata:
       # cluster name = registry dir basename; addon name = config.yaml dir basename
