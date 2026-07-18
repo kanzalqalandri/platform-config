@@ -26,13 +26,17 @@ applicationsets/
 clusters/                        # cluster registry — single source of cluster identity
   <cluster>/config.yaml          #   cloud + role (+ optional addonOverrides version pins)
 
-addons/
-  _base/<addon>/values.yaml            # fleet-wide addon values (define once)
-  fleet/<addon>/config.yaml            # runs on EVERY cluster        (chart repo/version/ns)
-  roles/<role>/<addon>/config.yaml     # runs on every <role> cluster (+ optional values.yaml)
-  clouds/<cloud>/<addon>/config.yaml   # runs on every <cloud> cluster (+ optional values.yaml)
-  oneoffs/<cluster>/<app>/config.yaml     # ONE-OFF: runs on that ONE named cluster (+ optional values.yaml)
-  overrides/<cluster>/<addon>/values.yaml # per-cluster value escape hatch   [optional]
+addons/                                # split by CONCERN — charts/ (what & where) vs values/ (how)
+  charts/
+    fleet/<addon>/config.yaml          # runs on EVERY cluster        (chart repo/version/ns)
+    roles/<role>/<addon>/config.yaml   # runs on every <role> cluster
+    clouds/<cloud>/<addon>/config.yaml # runs on every <cloud> cluster
+    oneoffs/<chart>/config.yaml        # ONE-OFF chart, defined ONCE  (no cluster here)
+  values/
+    defaults/<addon>/values.yaml       # addon defaults (define once)
+    <mirror of the chart's tier path>/values.yaml   # tier-level values (optional)
+    oneoffs/<cluster>/<chart>/values.yaml   # PLACES a one-off chart on <cluster> (+ its values)
+    clusters/<cluster>/<addon>/values.yaml  # per-cluster override of a tier addon  [optional]
 
 tenants/
   _base/values.yaml                    # global defaults (all clusters, all tenants)
@@ -63,16 +67,19 @@ powergrader/
 Assembled by ArgoCD multi-source `valueFiles` (`ignoreMissingValueFiles: true`,
 so optional tiers are skipped when absent).
 
-Add-ons (`fleet` < `roles/<role>` < `clouds/<cloud>` < `oneoffs/<cluster>` — least → most specific placement):
+Tier add-ons (`fleet` < `roles/<role>` < `clouds/<cloud>` — least → most specific, selected by cluster TYPE):
 ```
 chart defaults
-→ addons/_base/<addon>/values.yaml               fleet-wide
-→ addons/{fleet|roles/<role>|clouds/<cloud>|oneoffs/<cluster>}/<addon>/values.yaml   tier-level
-→ addons/overrides/<cluster>/<addon>/values.yaml  per-cluster
+→ addons/values/defaults/<addon>/values.yaml                addon-wide
+→ addons/values/{fleet|roles/<role>|clouds/<cloud>}/<addon>/values.yaml   tier-level
+→ addons/values/clusters/<cluster>/<addon>/values.yaml      per-cluster
 ```
-A **one-off** platform component on a single cluster = one `addons/oneoffs/<cluster>/<app>/config.yaml`
-(placement by cluster NAME). Do not use `roles/` for this — a second cluster of that
-role would pick it up too.
+(The tier-level file is the chart's own path with `addons/charts/` swapped to `addons/values/`.)
+
+**One-offs** are separate: the chart is defined once in `addons/charts/oneoffs/<chart>/config.yaml`,
+and it deploys to **each cluster that has a placement file** `addons/values/oneoffs/<cluster>/<chart>/values.yaml`.
+Add a target cluster = drop another placement file; bump the version = edit the one chart file.
+For a *type* of cluster use `roles/`/`clouds/` instead — one-offs are for named, explicit placement.
 
 Tenants:
 ```
