@@ -1,0 +1,8 @@
+# Base for the kustomize comparison. NOT applied directly — the REGION sentinel
+# in the generator globs is patched by each overlay.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - cluster-addons-appset.yaml
+  - tenants-appset.yaml
+  - powergrader-appset.yaml

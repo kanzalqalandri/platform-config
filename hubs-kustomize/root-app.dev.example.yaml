@@ -1,0 +1,22 @@
+# EXAMPLE ONLY — do NOT apply while hubs/chart is live (it would manage the
+# same ApplicationSet resources as hub-dev). This is what the dev hub's
+# bootstrap would look like under the kustomize variant: ArgoCD auto-detects
+# the kustomization.yaml in the source path.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: hub-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/kanzalqalandri/platform-config
+    targetRevision: main
+    path: hubs-kustomize/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
