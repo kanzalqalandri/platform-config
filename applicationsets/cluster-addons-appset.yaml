@@ -82,6 +82,7 @@ spec:
             # cluster = segment 3 of the placement path; chart = basename of the chart-def path
             name: "addon-{{index .place.path.segments 3}}-{{.path.basename}}"
           spec:
+            project: default              # required by the CRD on a generator-level template
             sources:
               - repoURL: "{{.chartRepo}}"
                 chart: "{{.chart}}"
