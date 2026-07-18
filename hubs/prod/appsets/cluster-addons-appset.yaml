@@ -1,0 +1,100 @@
+# PLAIN YAML — exactly what ArgoCD runs on the PROD hub. No templating.
+# The ONLY intended difference between regions is the region string in generator
+# globs; bin/check-hub-drift.sh (CI) fails on any other cross-region difference.
+# Add-on plane, scoped to THIS hub's region (prod).
+
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: cluster-addons
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    # ---- tier add-ons: registry join, clusters selected by TYPE ----
+    - matrix:
+        generators:
+          # 1) this REGION's cluster registry -> {cloud, role, addonOverrides?}
+          - git:
+              repoURL: https://github.com/kanzalqalandri/platform-config
+              revision: main
+              pathParamPrefix: cluster
+              files:
+                - path: "clusters/prod/*/config.yaml"
+          # 2) the addon sets that apply to THAT cluster (paths templated from child 1)
+          - git:
+              repoURL: https://github.com/kanzalqalandri/platform-config
+              revision: main
+              files:
+                - path: "addons/charts/fleet/*/config.yaml"
+                - path: "addons/charts/roles/{{.role}}/*/config.yaml"
+                - path: "addons/charts/clouds/{{.cloud}}/*/config.yaml"
+    # ---- one-offs: chart defined once, placed by values-side path ----
+    - matrix:
+        generators:
+          - git:                       # the chart, once — no cluster in the path
+              repoURL: https://github.com/kanzalqalandri/platform-config
+              revision: main
+              files:
+                - path: "addons/charts/oneoffs/*/config.yaml"
+          - git:                       # placement files for THIS region's clusters
+              repoURL: https://github.com/kanzalqalandri/platform-config
+              revision: main
+              pathParamPrefix: place
+              files:
+                - path: "addons/values/oneoffs/prod/*/{{.path.basename}}/values.yaml"
+        template:
+          metadata:
+            # placement path: addons/values/oneoffs/<region>/<cluster>/<chart> -> cluster = segment 4
+            name: "addon-{{index .place.path.segments 4}}-{{.path.basename}}"
+          spec:
+            project: default              # required by the CRD on a generator-level template
+            sources:
+              - repoURL: "{{.chartRepo}}"
+                chart: "{{.chart}}"
+                targetRevision: "{{.chartVersion}}"
+                helm:
+                  ignoreMissingValueFiles: true
+                  valueFiles:
+                    - "$values/addons/values/defaults/{{.path.basename}}/values.yaml"
+                    - "$values/{{.place.path.path}}/values.yaml"
+              - repoURL: https://github.com/kanzalqalandri/platform-config
+                targetRevision: main
+                ref: values
+            destination:
+              name: "{{index .place.path.segments 4}}"
+              namespace: "{{.namespace}}"
+  template:
+    metadata:
+      name: "addon-{{.cluster.path.basename}}-{{.path.basename}}"
+      annotations:
+        argocd.argoproj.io/sync-wave: "{{.syncWave | default \"0\"}}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      sources:
+        - repoURL: "{{.chartRepo}}"
+          chart: "{{.chart}}"
+          # tier default, unless this cluster's registry file pins the addon
+          targetRevision: "{{ dig .path.basename \"chartVersion\" .chartVersion (.addonOverrides | default dict) }}"
+          helm:
+            ignoreMissingValueFiles: true
+            valueFiles:
+              # ordered low -> high precedence (last wins). All under addons/values/.
+              - "$values/addons/values/defaults/{{.path.basename}}/values.yaml"
+              - "$values/{{ .path.path | replace \"addons/charts/\" \"addons/values/\" }}/values.yaml"
+              - "$values/addons/values/clusters/{{.cluster.path.basename}}/{{.path.basename}}/values.yaml"
+        - repoURL: https://github.com/kanzalqalandri/platform-config
+          targetRevision: main
+          ref: values
+      destination:
+        name: "{{.cluster.path.basename}}"
+        namespace: "{{.namespace}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true             # large CRDs (cert-manager) exceed the annotation limit

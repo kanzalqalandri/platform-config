@@ -1,0 +1,59 @@
+# PLAIN YAML — exactly what ArgoCD runs on the PROD hub. No templating.
+# The ONLY intended difference between regions is the region string in generator
+# globs; bin/check-hub-drift.sh (CI) fails on any other cross-region difference.
+# PowerGrader plane, scoped to THIS hub's region (prod).
+# Same matrix shape as tenants: registry join scopes envs to this region's clusters.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: powergrader
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - matrix:
+        generators:
+          - git:
+              repoURL: https://github.com/kanzalqalandri/platform-config
+              revision: main
+              pathParamPrefix: cluster
+              files:
+                - path: "clusters/prod/*/config.yaml"
+          - git:
+              repoURL: https://github.com/kanzalqalandri/platform-config
+              revision: main
+              files:
+                - path: "powergrader/{{.cluster.path.basename}}/*/*/config.yaml"
+  template:
+    metadata:
+      # segments: 0=powergrader 1=<cluster> 2=<env> 3=<app>  (unchanged)
+      name: "powergrader-{{index .path.segments 2}}-{{index .path.segments 3}}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      sources:
+        - repoURL: "{{.appRepoURL}}"
+          targetRevision: "{{.chartRevision}}"
+          path: "{{.helmPath}}"
+          helm:
+            ignoreMissingValueFiles: true
+            valueFiles:
+              - "$values/powergrader/_base/values.yaml"
+              - "$values/powergrader/_base/{{index .path.segments 3}}/values.yaml"
+              - "$values/{{.path.path}}/values.yaml"
+        - repoURL: https://github.com/kanzalqalandri/platform-config
+          targetRevision: main
+          ref: values
+      destination:
+        name: "{{index .path.segments 1}}"
+        namespace: "powergrader-{{index .path.segments 2}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        managedNamespaceMetadata:
+          labels:
+            app.kubernetes.io/managed-by: argocd
+        syncOptions:
+          - CreateNamespace=true

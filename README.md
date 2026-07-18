@@ -30,8 +30,8 @@ Demo fleet: `clusters/dev/gitops-c2` = `{aws, satellite}` (managed by the dev hu
 
 ```
 hubs/
-  chart/                         # ONE Helm chart of the 3 ApplicationSets; `region` is a value
-  <region>/root-app.yaml         # per-hub bootstrap Application (app-of-apps; region set here)
+  <region>/appsets/*.yaml        # the 3 ApplicationSets, PLAIN YAML per region (no templating)
+  <region>/root-app.yaml         # per-hub bootstrap Application (app-of-apps -> that dir)
 
 clusters/                        # cluster registry — single source of cluster identity
   <region>/<cluster>/config.yaml #   region in the PATH; cloud + role (+ addonOverrides pins) in content
