@@ -1,4 +1,4 @@
 tenantName: umbrella
 image:
-  tag: "4.4.4"
+  tag: "whatever"
 replicaCount: 2
