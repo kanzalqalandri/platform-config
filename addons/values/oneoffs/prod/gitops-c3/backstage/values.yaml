@@ -8,7 +8,8 @@ backstage:
       baseUrl: http://localhost:7007
     backend:
       baseUrl: http://localhost:7007
-      listen: ':7007'
+      listen:
+        port: 7007
       database:
         client: better-sqlite3
         connection: ':memory:'
