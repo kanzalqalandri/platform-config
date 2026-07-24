@@ -1,0 +1,10 @@
+# ONE-OFF ops component — Backstage developer portal (TRIAL, see DO evaluation of
+# self-service dashboards). Chart defined ONCE here; WHERE it runs is decided by
+# placement files under addons/values/oneoffs/<region>/<cluster>/backstage/.
+# Currently placed on gitops-c3 only. Runs the reference image with in-memory
+# SQLite — throwaway state, evaluation only, not a production install.
+chartRepo: https://backstage.github.io/charts
+chart: backstage
+chartVersion: 2.8.2
+namespace: backstage
+syncWave: "0"

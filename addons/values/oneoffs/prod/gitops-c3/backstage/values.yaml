@@ -1,0 +1,24 @@
+# PLACEMENT + values for the one-off Backstage trial on gitops-c3.
+# The existence of this file places charts/oneoffs/backstage on gitops-c3.
+# Reference image + in-memory SQLite + guest auth: enough to evaluate the UI and
+# Scaffolder; all state is lost on pod restart (intentional for the trial).
+backstage:
+  appConfig:
+    app:
+      baseUrl: http://localhost:7007
+    backend:
+      baseUrl: http://localhost:7007
+      listen: ':7007'
+      database:
+        client: better-sqlite3
+        connection: ':memory:'
+    auth:
+      providers:
+        guest:
+          dangerouslyAllowOutsideDevelopment: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
