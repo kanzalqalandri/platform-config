@@ -5,7 +5,10 @@
 backstage:
   appConfig:
     app:
+      title: Apporto Platform Portal (trial)
       baseUrl: http://localhost:7007
+    organization:
+      name: Apporto
     backend:
       baseUrl: http://localhost:7007
       listen:
